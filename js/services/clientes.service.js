@@ -41,9 +41,44 @@ export async function getClienteById(id) {
   return { id: docSnap.id, ...docSnap.data() };
 }
 
+export function normalizeQrCode(raw) {
+  if (!raw) return '';
+  return String(raw).trim().replace(/\s+/g, '');
+}
+
 export async function getClienteByQR(qrCode) {
+  const { cliente } = await buscarClientePorCodigo(qrCode);
+  return cliente;
+}
+
+/** Busca cliente por el campo `qrCode` en Firestore (colección clientes). */
+export async function buscarClientePorCodigo(qrCode) {
+  const normalized = normalizeQrCode(qrCode);
+  console.log('[BFC Acceso] buscarClientePorCodigo — campo Firestore: qrCode');
+  console.log('[BFC Acceso] Código original:', qrCode);
+  console.log('[BFC Acceso] Código normalizado:', normalized);
+
   const clientes = await fetchAllClientes();
-  return clientes.find(c => c.qrCode === qrCode) || null;
+  console.log('[BFC Acceso] Clientes cargados:', clientes.length);
+
+  let cliente = clientes.find(c => c.qrCode === normalized) || null;
+
+  if (!cliente && normalized) {
+    cliente = clientes.find(c =>
+      c.qrCode && normalizeQrCode(c.qrCode).toUpperCase() === normalized.toUpperCase()
+    ) || null;
+  }
+
+  if (cliente) {
+    console.log('[BFC Acceso] Cliente encontrado:', cliente.id, cliente.nombreCompleto, '| qrCode:', cliente.qrCode);
+  } else {
+    console.warn('[BFC Acceso] Cliente NO encontrado para código:', normalized);
+    if (clientes.length > 0) {
+      console.log('[BFC Acceso] Ejemplo de qrCode en BD:', clientes[0].qrCode);
+    }
+  }
+
+  return { cliente, codigoBuscado: normalized };
 }
 
 export async function createCliente(data, userId) {
