@@ -1,0 +1,113 @@
+/* Control de Vencimientos */
+.ven-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.ven-date-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.ven-date-bar .form-group {
+  margin-bottom: 0;
+  min-width: 160px;
+}
+
+.ven-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ven-toolbar .search-box {
+  flex: 1;
+  min-width: 220px;
+}
+
+.ven-export-btns {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ven-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.ven-filter-chip {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.ven-filter-chip:hover {
+  border-color: var(--color-gold-dark);
+  color: var(--color-text-primary);
+}
+
+.ven-filter-chip.active {
+  background: rgba(201, 162, 39, 0.12);
+  border-color: var(--color-gold);
+  color: var(--color-gold-light);
+}
+
+.ven-dias {
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.ven-dias--soon { color: var(--color-warning); }
+.ven-dias--urgent { color: #f97316; }
+.ven-dias--today { color: var(--color-danger); }
+.ven-dias--expired { color: #dc2626; font-weight: 700; }
+
+.ven-row--alert td {
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.ven-row--warn td {
+  background: rgba(234, 179, 8, 0.04);
+}
+
+@media (max-width: 1200px) {
+  .ven-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .ven-grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .ven-date-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ven-date-bar .form-group {
+    width: 100%;
+  }
+}

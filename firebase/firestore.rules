@@ -1,0 +1,126 @@
+rules_version = '2';
+
+// BLOSSOM FITNESS CLUB — Reglas completas con bootstrap automático (setup / onboarding)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function myUserDoc() {
+      return /databases/$(database)/documents/usuarios/$(uid());
+    }
+
+    function myProfile() {
+      return isAuth() && exists(myUserDoc()) ? get(myUserDoc()).data : null;
+    }
+
+    function isActive() {
+      return myProfile() != null && myProfile().activo != false;
+    }
+
+    function myRole() {
+      return isActive() ? myProfile().rol : '';
+    }
+
+    function isAdmin() {
+      return myRole() == 'admin';
+    }
+
+    function isStaff() {
+      return myRole() in ['admin', 'recepcion'];
+    }
+
+    function validUserFields() {
+      return request.resource.data.keys().hasAll(['email', 'nombre', 'rol', 'activo'])
+        && request.resource.data.rol in ['admin', 'recepcion']
+        && request.resource.data.activo == true
+        && request.resource.data.email is string
+        && request.resource.data.nombre is string;
+    }
+
+    function isOwnUser(userId) {
+      return isAuth() && uid() == userId;
+    }
+
+    function isBootstrapUser(userId) {
+      return isOwnUser(userId)
+        && !exists(/databases/$(database)/documents/usuarios/$(userId))
+        && validUserFields();
+    }
+
+    // ── Bootstrap: lectura pública del estado del sistema (sin login) ──
+    match /configuracion/sistema {
+      allow read: if true;
+      allow create, update: if isAdmin();
+    }
+
+    match /configuracion/general {
+      allow read: if isAuth();
+      allow create, update: if isAdmin();
+    }
+
+    // ── Resto de configuracion (si hubiera otros docs) ──
+    match /configuracion/{docId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /{coleccion}/{documento} {
+
+      allow read: if
+        (coleccion == 'usuarios' && isOwnUser(documento))
+        || (coleccion == 'usuarios' && isAdmin())
+        || (coleccion == 'configuracion')
+        || (coleccion != 'usuarios' && coleccion != 'configuracion' && isStaff());
+
+      allow create: if
+        (coleccion == 'usuarios' && isBootstrapUser(documento))
+        || (coleccion == 'usuarios' && isAdmin() && validUserFields())
+        || (coleccion == 'clientes' && isStaff())
+        || (coleccion == 'membresias' && isStaff())
+        || (coleccion == 'pagos' && isStaff())
+        || (coleccion == 'accesos' && isStaff())
+        || (coleccion == 'notificaciones' && isStaff())
+        || (coleccion == 'cajas' && isStaff())
+        || (coleccion == 'planes' && isAdmin())
+        || (coleccion == 'productos' && isAdmin())
+        || (coleccion == 'movimientosInventario' && isAdmin());
+
+      allow update: if
+        (coleccion == 'usuarios' && isAdmin())
+        || (coleccion == 'usuarios' && isOwnUser(documento)
+            && validUserFields()
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rol', 'activo']))
+        || (coleccion == 'clientes' && isStaff())
+        || (coleccion == 'membresias' && isStaff())
+        || (coleccion == 'pagos' && isStaff())
+        || (coleccion == 'notificaciones' && isStaff())
+        || (coleccion == 'cajas' && isStaff())
+        || (coleccion == 'planes' && isAdmin())
+        || (coleccion == 'productos' && isAdmin());
+
+      allow delete: if
+        (coleccion == 'usuarios' && isAdmin())
+        || (coleccion == 'clientes' && isAdmin())
+        || (coleccion == 'membresias' && isAdmin())
+        || (coleccion == 'pagos' && isAdmin())
+        || (coleccion == 'accesos' && isAdmin())
+        || (coleccion == 'notificaciones' && isAdmin())
+        || (coleccion == 'cajas' && isAdmin())
+        || (coleccion == 'planes' && isAdmin())
+        || (coleccion == 'productos' && isAdmin())
+        || (coleccion == 'movimientosInventario' && isAdmin());
+
+    match /cajas/{cajaId}/movimientos/{movId} {
+      allow read, create: if isStaff();
+      allow delete: if isAdmin();
+    }
+  }
+}
