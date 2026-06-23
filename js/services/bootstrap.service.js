@@ -34,20 +34,11 @@ function log(msg, data) {
   console.log(`[BFC Bootstrap] ${msg}`, data ?? '');
 }
 
-/** Indica si el documento configuracion/sistema marca el sistema como listo. */
-function sistemaMarcadoComoConfigurado(data) {
-  if (!data) return false;
-  return data.configurado === true
-    || data.tieneAdmin === true
-    || data.inicializado === true;
-}
-
 /**
- * Marca el sistema como configurado (bandera permanente).
- * Nunca pasar tieneAdmin: false ni configurado: false aquí.
+ * Marca metadatos opcionales en configuracion/sistema (no usado para decidir onboarding).
  */
 export async function marcarSistemaConfigurado(extra = {}) {
-  log('Marcando sistema como configurado');
+  log('Actualizando metadatos configuracion/sistema');
   await setDoc(doc(db, 'configuracion', SISTEMA_DOC), {
     configurado: true,
     tieneAdmin: true,
@@ -60,92 +51,51 @@ export async function marcarSistemaConfigurado(extra = {}) {
 }
 
 /**
- * Busca al menos un administrador activo en usuarios (requiere sesión con permisos).
+ * Fuente única de verdad: ¿existe al menos un admin en usuarios?
+ * Consulta Firestore directamente (sin localStorage, cookies ni banderas locales).
  */
+export async function existeAdministradorEnFirestore() {
+  const q = query(
+    collection(db, 'usuarios'),
+    where('rol', '==', ROLES.ADMIN),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  const existe = !snap.empty;
+  log('Consulta administrador en usuarios', { existe });
+  return existe;
+}
+
+/** @deprecated Usar existeAdministradorEnFirestore */
 export async function hayAdministradorEnUsuarios() {
-  try {
-    const q = query(
-      collection(db, 'usuarios'),
-      where('rol', '==', ROLES.ADMIN),
-      where('activo', '==', true),
-      limit(1)
-    );
-    const snap = await getDocs(q);
-    const existe = !snap.empty;
-    log('Consulta administradores en usuarios', { existe });
-    return existe;
-  } catch (error) {
-    console.warn('[BFC Bootstrap] No se pudo consultar usuarios:', error.message);
-    return false;
-  }
+  return existeAdministradorEnFirestore();
 }
 
 /**
- * Verifica si el sistema necesita configuración inicial (sin login).
- * Lee configuracion/sistema — regla pública de solo lectura.
+ * Decide si mostrar onboarding o login.
+ * Únicamente consulta usuarios con rol = admin en Firestore.
  */
 export async function verificarEstadoSistema() {
-  log('Verificando estado del sistema...');
+  log('Verificando existencia de administrador en usuarios...');
 
   try {
-    const snap = await getDoc(doc(db, 'configuracion', SISTEMA_DOC));
-
-    if (!snap.exists()) {
-      log('configuracion/sistema no existe → puede requerir onboarding');
-      return {
-        necesitaOnboarding: true,
-        configurado: false,
-        tieneAdmin: false,
-        motivo: 'sin_documento_sistema'
-      };
-    }
-
-    const data = snap.data();
-    const configurado = sistemaMarcadoComoConfigurado(data);
-
-    log('Estado configuracion/sistema', { configurado, data });
-
+    const tieneAdmin = await existeAdministradorEnFirestore();
     return {
-      necesitaOnboarding: !configurado,
-      configurado,
-      tieneAdmin: configurado || data.tieneAdmin === true,
-      motivo: configurado ? 'sistema_configurado' : 'documento_incompleto'
+      necesitaOnboarding: !tieneAdmin,
+      tieneAdmin,
+      motivo: tieneAdmin ? 'admin_en_usuarios' : 'sin_admin'
     };
   } catch (error) {
-    console.warn('[BFC Bootstrap] Error leyendo configuracion/sistema:', error.code, error.message);
-    // No asumir sistema vacío: un error de red/permisos no debe forzar onboarding
+    console.warn('[BFC Bootstrap] Error consultando usuarios:', error.code, error.message);
+    // Error de red/permisos: no forzar onboarding, mostrar login
     return {
       necesitaOnboarding: false,
-      configurado: false,
       tieneAdmin: false,
       error: error.message,
-      motivo: 'error_lectura',
+      motivo: 'error_consulta',
       mostrarLogin: true
     };
   }
-}
-
-/**
- * Confirmación completa: documento sistema + administrador en usuarios (con sesión).
- */
-export async function confirmarSistemaConfigurado(userData = null) {
-  const estado = await verificarEstadoSistema();
-  if (estado.configurado) {
-    return { configurado: true, reparado: false };
-  }
-
-  if (userData?.rol === ROLES.ADMIN) {
-    await marcarSistemaConfigurado({ adminUid: userData.id, reparadoDesde: 'sesion_admin' });
-    return { configurado: true, reparado: true };
-  }
-
-  const hayAdmin = await hayAdministradorEnUsuarios();
-  if (hayAdmin) {
-    await marcarSistemaConfigurado({ reparadoDesde: 'consulta_usuarios' });
-    return { configurado: true, reparado: true };
-  }
-
-  return { configurado: false, reparado: false };
 }
 
 async function asegurarConfiguracionGeneral() {

@@ -92,7 +92,12 @@ service cloud.firestore {
 
     // ── Usuarios ────────────────────────────────────────────────────────────
     match /usuarios/{userId} {
-      allow read: if isOwnUser(userId) || isAdmin();
+      allow get: if isOwnUser(userId) || isAdmin();
+      // Sin sesión: solo permite comprobar si existe al menos un admin (login vs onboarding)
+      allow list: if isAdmin()
+        || (request.auth == null
+            && resource.data.rol == 'admin'
+            && request.query.limit <= 1);
       allow create: if isBootstrapUser(userId) || (isAdmin() && validUserFields());
       allow update: if isAdmin()
         || (isOwnUser(userId)

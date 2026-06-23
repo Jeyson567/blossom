@@ -47,7 +47,7 @@ export async function diagnosticarSistema() {
   if (profileResult.status === 'ok') {
     report('Perfil de usuario', true, user.uid);
   } else if (profileResult.status === 'not_found') {
-    report('Perfil de usuario', false, 'Cuenta sin configurar. Use la configuración inicial o contacte al administrador.');
+    report('Perfil de usuario', false, 'Cuenta sin configurar. Contacte al administrador.');
   } else if (profileResult.status === 'permission_denied') {
     report('Perfil de usuario', false, 'Sin permisos de acceso. Verifique la configuración de Firebase.');
   } else {

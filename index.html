@@ -76,7 +76,7 @@
       initAuth, login, getAuthErrorMessage, AuthError,
       getCurrentUserData, getLastAuthError, clearLastAuthError, resetAuthCache
     } from './js/auth.js';
-    import { verificarEstadoSistema, crearAdministradorInicial, confirmarSistemaConfigurado } from './js/services/bootstrap.service.js';
+    import { verificarEstadoSistema, crearAdministradorInicial } from './js/services/bootstrap.service.js';
     import { diagnosticarSistema } from './js/utils/diagnostics.js';
 
     console.log('[BFC Login] ─── INICIO ───');
@@ -108,11 +108,10 @@
     }
 
     if (user && userData) {
-      console.log('[BFC Login] Sesión activa detectada → reparar bandera si aplica → app.html');
-      await confirmarSistemaConfigurado(userData);
+      console.log('[BFC Login] Sesión activa detectada → app.html');
       window.location.href = 'app.html';
     } else {
-    // 2. Verificar bandera configuracion/sistema (lectura pública)
+    // 2. Consultar Firestore: ¿existe al menos un admin en usuarios?
     const estado = await verificarEstadoSistema();
     console.log('[BFC Login] Estado del sistema:', estado);
 
@@ -195,10 +194,6 @@
 
       try {
         await login(email, password, remember);
-        const loggedUser = getCurrentUserData();
-        if (loggedUser?.rol === 'admin') {
-          await confirmarSistemaConfigurado(loggedUser);
-        }
         window.location.href = 'app.html';
       } catch (error) {
         console.error('[BFC Login] Error:', error);

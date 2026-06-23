@@ -145,7 +145,7 @@ export async function loadUserData(uid) {
 function profileErrorMessage(result, authUser) {
   switch (result.status) {
     case 'not_found':
-      return 'Su cuenta no está configurada en el sistema. Complete la configuración inicial o contacte al administrador.';
+      return 'Su cuenta no está configurada en el sistema. Contacte al administrador.';
     case 'inactive':
       return 'Su cuenta está desactivada. Contacte al administrador.';
     case 'invalid_role':
