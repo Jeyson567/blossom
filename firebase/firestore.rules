@@ -1,10 +1,9 @@
 rules_version = '2';
 
-// BLOSSOM FITNESS CLUB — Reglas completas con bootstrap automático (setup / onboarding)
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Autenticación y perfil ──────────────────────────────────────────────
     function isAuth() {
       return request.auth != null;
     }
@@ -13,12 +12,12 @@ service cloud.firestore {
       return request.auth.uid;
     }
 
-    function myUserDoc() {
+    function myUserPath() {
       return /databases/$(database)/documents/usuarios/$(uid());
     }
 
     function myProfile() {
-      return isAuth() && exists(myUserDoc()) ? get(myUserDoc()).data : null;
+      return isAuth() && exists(myUserPath()) ? get(myUserPath()).data : null;
     }
 
     function isActive() {
@@ -33,20 +32,32 @@ service cloud.firestore {
       return myRole() == 'admin';
     }
 
-    function isStaff() {
-      return myRole() in ['admin', 'recepcion'];
+    function isCaja() {
+      return myRole() in ['admin', 'caja', 'recepcion'];
     }
 
-    function validUserFields() {
-      return request.resource.data.keys().hasAll(['email', 'nombre', 'rol', 'activo'])
-        && request.resource.data.rol in ['admin', 'recepcion']
-        && request.resource.data.activo == true
-        && request.resource.data.email is string
-        && request.resource.data.nombre is string;
+    function isMesero() {
+      return myRole() in ['admin', 'mesero'];
+    }
+
+    function isCocina() {
+      return myRole() in ['admin', 'cocina'];
+    }
+
+    function isStaffGym() {
+      return myRole() in ['admin', 'recepcion', 'caja'];
     }
 
     function isOwnUser(userId) {
       return isAuth() && uid() == userId;
+    }
+
+    function validUserFields() {
+      return request.resource.data.keys().hasAll(['email', 'nombre', 'rol', 'activo'])
+        && request.resource.data.rol in ['admin', 'caja', 'mesero', 'cocina', 'recepcion']
+        && request.resource.data.activo is bool
+        && request.resource.data.email is string
+        && request.resource.data.nombre is string;
     }
 
     function isBootstrapUser(userId) {
@@ -55,72 +66,196 @@ service cloud.firestore {
         && validUserFields();
     }
 
-    // ── Bootstrap: lectura pública del estado del sistema (sin login) ──
+    function isStringField(field) {
+      return !(field in request.resource.data) || request.resource.data[field] is string;
+    }
+
+    function isNumberField(field) {
+      return !(field in request.resource.data) || request.resource.data[field] is number;
+    }
+
+    function isTimestampField(field) {
+      return !(field in request.resource.data) || request.resource.data[field] is timestamp;
+    }
+
+    // ── Configuración / bootstrap ───────────────────────────────────────────
     match /configuracion/sistema {
       allow read: if true;
-      allow create, update: if isAdmin();
+      allow create, update: if isAdmin() || (isAuth() && !exists(/databases/$(database)/documents/configuracion/sistema));
+      allow delete: if isAdmin();
     }
 
-    match /configuracion/general {
-      allow read: if isAuth();
-      allow create, update: if isAdmin();
-    }
-
-    // ── Resto de configuracion (si hubiera otros docs) ──
     match /configuracion/{docId} {
       allow read: if isAuth();
       allow create, update, delete: if isAdmin();
     }
 
-    match /{coleccion}/{documento} {
-
-      allow read: if
-        (coleccion == 'usuarios' && isOwnUser(documento))
-        || (coleccion == 'usuarios' && isAdmin())
-        || (coleccion == 'configuracion')
-        || (coleccion != 'usuarios' && coleccion != 'configuracion' && isStaff());
-
-      allow create: if
-        (coleccion == 'usuarios' && isBootstrapUser(documento))
-        || (coleccion == 'usuarios' && isAdmin() && validUserFields())
-        || (coleccion == 'clientes' && isStaff())
-        || (coleccion == 'membresias' && isStaff())
-        || (coleccion == 'pagos' && isStaff())
-        || (coleccion == 'accesos' && isStaff())
-        || (coleccion == 'notificaciones' && isStaff())
-        || (coleccion == 'cajas' && isStaff())
-        || (coleccion == 'planes' && isAdmin())
-        || (coleccion == 'productos' && isAdmin())
-        || (coleccion == 'movimientosInventario' && isAdmin());
-
-      allow update: if
-        (coleccion == 'usuarios' && isAdmin())
-        || (coleccion == 'usuarios' && isOwnUser(documento)
+    // ── Usuarios ────────────────────────────────────────────────────────────
+    match /usuarios/{userId} {
+      allow read: if isOwnUser(userId) || isAdmin();
+      allow create: if isBootstrapUser(userId) || (isAdmin() && validUserFields());
+      allow update: if isAdmin()
+        || (isOwnUser(userId)
             && validUserFields()
-            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rol', 'activo']))
-        || (coleccion == 'clientes' && isStaff())
-        || (coleccion == 'membresias' && isStaff())
-        || (coleccion == 'pagos' && isStaff())
-        || (coleccion == 'notificaciones' && isStaff())
-        || (coleccion == 'cajas' && isStaff())
-        || (coleccion == 'planes' && isAdmin())
-        || (coleccion == 'productos' && isAdmin());
-
-      allow delete: if
-        (coleccion == 'usuarios' && isAdmin())
-        || (coleccion == 'clientes' && isAdmin())
-        || (coleccion == 'membresias' && isAdmin())
-        || (coleccion == 'pagos' && isAdmin())
-        || (coleccion == 'accesos' && isAdmin())
-        || (coleccion == 'notificaciones' && isAdmin())
-        || (coleccion == 'cajas' && isAdmin())
-        || (coleccion == 'planes' && isAdmin())
-        || (coleccion == 'productos' && isAdmin())
-        || (coleccion == 'movimientosInventario' && isAdmin());
-
-    match /cajas/{cajaId}/movimientos/{movId} {
-      allow read, create: if isStaff();
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rol', 'activo']));
       allow delete: if isAdmin();
+    }
+
+    // ── Clientes ────────────────────────────────────────────────────────────
+    match /clientes/{clienteId} {
+      allow read: if isCaja() || isMesero() || isCocina();
+      allow create, update: if isCaja();
+      allow delete: if isAdmin();
+    }
+
+    // ── Productos e inventario ──────────────────────────────────────────────
+    match /productos/{productoId} {
+      allow read: if isAuth() && isActive();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (isCaja() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'updatedAt']));
+    }
+
+    match /inventario/{itemId} {
+      allow read: if isAuth() && isActive();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /categorias/{categoriaId} {
+      allow read: if isAuth() && isActive();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /movimientosInventario/{movId} {
+      allow read: if isAdmin() || isCaja();
+      allow create: if isAdmin() || isCaja();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Ventas, tickets, cotizaciones ───────────────────────────────────────
+    match /ventas/{ventaId} {
+      allow read, create, update: if isCaja();
+      allow delete: if isAdmin();
+    }
+
+    match /tickets/{ticketId} {
+      allow read, create, update: if isCaja();
+      allow delete: if isAdmin();
+    }
+
+    match /cotizaciones/{cotizacionId} {
+      allow read, create, update: if isCaja();
+      allow delete: if isAdmin();
+    }
+
+    // ── Pagos y membresías (gimnasio) ───────────────────────────────────────
+    match /pagos/{pagoId} {
+      allow read, create, update: if isCaja();
+      allow delete: if isAdmin();
+    }
+
+    match /membresias/{membresiaId} {
+      allow read, create, update: if isCaja();
+      allow delete: if isAdmin();
+    }
+
+    match /planes/{planId} {
+      allow read: if isStaffGym() || isCaja();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /accesos/{accesoId} {
+      allow read, create: if isCaja();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /notificaciones/{notifId} {
+      allow read, create, update: if isCaja();
+      allow delete: if isAdmin();
+    }
+
+    // ── Caja y gastos ───────────────────────────────────────────────────────
+    match /cajas/{cajaId} {
+      allow read, create, update: if isCaja();
+      allow delete: if isAdmin();
+
+      match /movimientos/{movId} {
+        allow read, create: if isCaja();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /caja/{docId} {
+      allow read, create, update: if isCaja();
+      allow delete: if isAdmin();
+    }
+
+    match /movimientosCaja/{movId} {
+      allow read, create: if isCaja();
+      allow update, delete: if isAdmin();
+    }
+
+    match /gastos/{gastoId} {
+      allow read, create, update: if isCaja() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Restaurante ─────────────────────────────────────────────────────────
+    match /mesas/{mesaId} {
+      allow read, create, update: if isMesero() || isCaja();
+      allow delete: if isAdmin();
+    }
+
+    match /pedidos/{pedidoId} {
+      allow read: if isMesero() || isCocina() || isCaja();
+      allow create, update: if isMesero() || isCocina() || isCaja();
+      allow delete: if isAdmin();
+
+      match /items/{itemId} {
+        allow read: if isMesero() || isCocina() || isCaja();
+        allow create, update: if isMesero() || isCocina();
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /cocina/{docId} {
+      allow read, update: if isCocina() || isAdmin();
+      allow create: if isCocina() || isMesero() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Hotel ───────────────────────────────────────────────────────────────
+    match /hotel/{docId} {
+      allow read: if isAuth() && isActive();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /gimnasio/{docId} {
+      allow read: if isAuth() && isActive();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /habitaciones/{habitacionId} {
+      allow read: if isAuth() && isActive();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /reservaciones/{reservacionId} {
+      allow read, create, update: if isCaja() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Reportes (snapshots / exportaciones guardadas) ──────────────────────
+    match /reportes/{reporteId} {
+      allow read: if isAdmin() || isCaja();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── Denegar cualquier otra colección no definida ────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

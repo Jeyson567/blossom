@@ -2,7 +2,7 @@ import {
   getProductos, createProducto, updateProducto, deleteProducto,
   registrarMovimiento, getStockAlerts, getCategorias
 } from '../services/inventario.service.js';
-import { renderDataTable, renderPagination, renderStatusBadge } from '../components/data-table.js';
+import { renderDataTable, renderPagination, appendPagination } from '../components/data-table.js';
 import { renderEmptyState, bindEmptyAction } from '../components/empty-state.js';
 import { createModal } from '../components/modal.js';
 import { getCurrentUserData, getUserRole } from '../auth.js';
@@ -51,7 +51,7 @@ async function loadProductos(container, alerts) {
         </div>
         <button class="btn btn-primary" id="btn-nuevo-producto">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-          Agregar Producto
+          Nuevo Producto
         </button>
       </div>
 
@@ -76,7 +76,7 @@ async function loadProductos(container, alerts) {
           icon: 'inventory',
           title: 'No existen productos registrados',
           message: 'Agregue productos para controlar el stock de la tienda del gimnasio.',
-          actionLabel: 'Agregar Producto',
+          actionLabel: 'Nuevo Producto',
           actionId: 'empty-agregar-producto'
         }) : renderDataTable({
           columns: [
@@ -87,7 +87,8 @@ async function loadProductos(container, alerts) {
               const cls = v <= 0 ? 'badge-danger' : v <= row.stockMinimo ? 'badge-warning' : 'badge-success';
               return `<span class="badge ${cls}">${v}</span>`;
             }},
-            { key: 'precioVenta', label: 'Precio Venta', format: 'currency' }
+            { key: 'precioVenta', label: 'Precio Venta', format: 'currency' },
+            { key: 'ganancia', label: 'Ganancia/u', render: (_, row) => formatCurrency((row.precioVenta || 0) - (row.precioCompra || 0)) }
           ],
           data,
           actions: (row) => `
@@ -104,7 +105,12 @@ async function loadProductos(container, alerts) {
 
   if (!isEmpty) {
     const paginationEl = renderPagination({ page, perPage, total, onPageChange: (p) => { currentPage = p; render(container); } });
-    document.getElementById('pagination-container')?.appendChild(paginationEl);
+    console.log('appendChild recibe:', paginationEl);
+    console.log(typeof paginationEl);
+    console.log(paginationEl);
+    if (paginationEl instanceof Node) {
+      appendPagination('pagination-container', paginationEl);
+    }
   }
 
   document.getElementById('btn-nuevo-producto')?.addEventListener('click', () => showProductoForm(container));
@@ -137,18 +143,23 @@ async function showProductoForm(container, id = null) {
     producto = await getProductoById(id);
   }
 
+  const categorias = await getCategorias().catch(() => []);
+  const categoriaOptions = ['General', 'Proteínas', 'Creatinas', 'Accesorios', 'Suplementos', ...categorias]
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .map(c => `<option value="${c}" ${producto?.categoria === c ? 'selected' : ''}>${c}</option>`).join('');
+
   const { close } = createModal({
     title: producto ? 'Editar Producto' : 'Nuevo Producto',
     content: `
       <form id="form-producto">
         <div class="form-grid">
-          <div class="form-group"><label class="form-label required">Código</label><input class="form-input" name="codigo" value="${producto?.codigo || ''}" required></div>
-          <div class="form-group"><label class="form-label required">Nombre</label><input class="form-input" name="nombre" value="${producto?.nombre || ''}" required></div>
-          <div class="form-group"><label class="form-label">Categoría</label><input class="form-input" name="categoria" value="${producto?.categoria || 'General'}"></div>
-          <div class="form-group"><label class="form-label">Stock</label><input type="number" class="form-input" name="stock" value="${producto?.stock || 0}"></div>
-          <div class="form-group"><label class="form-label">Stock Mínimo</label><input type="number" class="form-input" name="stockMinimo" value="${producto?.stockMinimo || 5}"></div>
-          <div class="form-group"><label class="form-label">Precio Compra</label><input type="number" step="0.01" class="form-input" name="precioCompra" value="${producto?.precioCompra || 0}"></div>
-          <div class="form-group"><label class="form-label">Precio Venta</label><input type="number" step="0.01" class="form-input" name="precioVenta" value="${producto?.precioVenta || 0}"></div>
+          <div class="form-group" style="grid-column:1/-1;"><label class="form-label required">Nombre</label><input class="form-input" name="nombre" value="${producto?.nombre || ''}" required></div>
+          <div class="form-group"><label class="form-label required">Categoría</label><select class="form-select" name="categoria">${categoriaOptions}</select></div>
+          <div class="form-group"><label class="form-label">Código</label><input class="form-input" name="codigo" value="${producto?.codigo || ''}" placeholder="Auto si vacío"></div>
+          <div class="form-group"><label class="form-label required">Precio compra (Q)</label><input type="number" step="0.01" min="0" class="form-input" name="precioCompra" value="${producto?.precioCompra ?? 0}" required></div>
+          <div class="form-group"><label class="form-label required">Precio venta (Q)</label><input type="number" step="0.01" min="0" class="form-input" name="precioVenta" value="${producto?.precioVenta ?? 0}" required></div>
+          <div class="form-group"><label class="form-label required">Stock actual</label><input type="number" min="0" class="form-input" name="stock" value="${producto?.stock ?? 0}" required></div>
+          <div class="form-group"><label class="form-label required">Stock mínimo</label><input type="number" min="0" class="form-input" name="stockMinimo" value="${producto?.stockMinimo ?? 5}" required></div>
         </div>
       </form>
     `,

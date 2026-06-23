@@ -3,7 +3,7 @@ import {
   Timestamp, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { db } from '../../firebase/firebase-config.js';
-import { startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear } from '../utils/helpers.js';
+import { startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, getWeekRange } from '../utils/helpers.js';
 
 const COLLECTION = 'pagos';
 
@@ -14,8 +14,12 @@ async function fetchAllPagos() {
     .sort((a, b) => (b.fecha?.toMillis?.() || 0) - (a.fecha?.toMillis?.() || 0));
 }
 
-export async function createPago({ clienteId, clienteNombre, concepto, tipo, monto, metodoPago, membresiaId, productoId, usuario }) {
+export async function createPago({
+  clienteId, clienteNombre, concepto, tipo, monto, metodoPago,
+  membresiaId, productoId, productoNombre, cantidad, ganancia, precioCompraUnitario, usuario
+}) {
   const now = new Date();
+  const qty = Number(cantidad) || 1;
   const pagoData = {
     clienteId: clienteId || null,
     clienteNombre: clienteNombre || '—',
@@ -27,6 +31,10 @@ export async function createPago({ clienteId, clienteNombre, concepto, tipo, mon
     usuarioNombre: usuario.nombre,
     membresiaId: membresiaId || null,
     productoId: productoId || null,
+    productoNombre: productoNombre || null,
+    cantidad: tipo === 'producto' ? qty : null,
+    ganancia: ganancia != null ? Number(ganancia) : null,
+    precioCompraUnitario: precioCompraUnitario != null ? Number(precioCompraUnitario) : null,
     fecha: Timestamp.fromDate(now),
     createdAt: serverTimestamp()
   };
@@ -131,4 +139,47 @@ export async function deletePago(id) {
 
 export async function getAllPagos() {
   return fetchAllPagos();
+}
+
+function calcGananciasFromPagos(pagos) {
+  const membresias = pagos.filter(p => p.tipo === 'membresia' || p.tipo === 'inscripcion');
+  const productos = pagos.filter(p => p.tipo === 'producto');
+  const otros = pagos.filter(p => !['membresia', 'inscripcion', 'producto'].includes(p.tipo));
+
+  const ingresosMembresias = membresias.reduce((s, p) => s + (p.monto || 0), 0);
+  const ingresosProductos = productos.reduce((s, p) => s + (p.monto || 0), 0);
+  const ingresosOtros = otros.reduce((s, p) => s + (p.monto || 0), 0);
+  const gananciaProductos = productos.reduce((s, p) => s + (p.ganancia ?? ((p.monto || 0) - (p.precioCompraUnitario || 0) * (p.cantidad || 1))), 0);
+  const gananciaMembresias = ingresosMembresias;
+  const gananciaNeta = gananciaMembresias + gananciaProductos + ingresosOtros;
+
+  return {
+    ingresosMembresias,
+    ingresosProductos,
+    ingresosOtros,
+    gananciaProductos,
+    gananciaMembresias,
+    gananciaNeta,
+    totalIngresos: ingresosMembresias + ingresosProductos + ingresosOtros
+  };
+}
+
+export async function getGananciasPorRango(inicio, fin) {
+  const pagos = await fetchAllPagos();
+  const filtered = pagos.filter(p => {
+    const f = p.fecha?.toDate?.();
+    return f && f >= inicio && f <= fin;
+  });
+  return calcGananciasFromPagos(filtered);
+}
+
+export async function getGananciasDashboard() {
+  const { start: weekStart, end: weekEnd } = getWeekRange();
+  const [hoy, semana, mes, anio] = await Promise.all([
+    getGananciasPorRango(startOfDay(), endOfDay()),
+    getGananciasPorRango(weekStart, weekEnd),
+    getGananciasPorRango(startOfMonth(), endOfMonth()),
+    getGananciasPorRango(startOfYear(), endOfDay())
+  ]);
+  return { hoy, semana, mes, anio };
 }

@@ -1,5 +1,5 @@
 import { getClientesStats, getClientesPorVencer, refreshMembershipStatuses } from '../services/clientes.service.js';
-import { getIngresosDelDia, getIngresosDelMes, getIngresosMensuales, getRecentPagos } from '../services/pagos.service.js';
+import { getIngresosDelDia, getIngresosDelMes, getIngresosMensuales, getRecentPagos, getGananciasDashboard } from '../services/pagos.service.js';
 import { getMembresiasVendidas, getRecentMembresias } from '../services/membresias.service.js';
 import { getRecentAccesos } from '../services/accesos.service.js';
 import { formatCurrency, formatDate, formatRelativeTime } from '../utils/formatters.js';
@@ -31,7 +31,8 @@ export async function render(container) {
     getRecentAccesos(5),
     getClientesPorVencer(0),
     getClientesPorVencer(3),
-    getClientesPorVencer(7)
+    getClientesPorVencer(7),
+    getGananciasDashboard()
   ]);
 
   const get = (i, fallback) => results[i].status === 'fulfilled' ? results[i].value : fallback;
@@ -56,6 +57,9 @@ export async function render(container) {
   const vencenHoy = get(8, []);
   const vencen3 = get(9, []);
   const vencen7 = get(10, []);
+  const ganancias = get(11, { hoy: {}, semana: {}, mes: {}, anio: {} });
+
+  logRejected('getGananciasDashboard', 11);
 
   container.innerHTML = `
     <div class="animate-fade-in">
@@ -73,6 +77,34 @@ export async function render(container) {
         ${statCard('Ingresos Hoy', formatCurrency(ingresosDia.total), 'money', 'var(--color-gold)')}
         ${statCard('Ingresos Mes', formatCurrency(ingresosMes.total), 'chart', 'var(--color-gold)')}
         ${statCard('Nuevos Clientes', stats.nuevos, 'new', 'var(--color-info)')}
+      </div>
+
+      <div class="card" style="margin-bottom:1.5rem;">
+        <h3 style="font-size:1rem;margin-bottom:1rem;">💰 Ganancias</h3>
+        <div class="grid-stats" style="margin-bottom:1rem;">
+          ${statCard('Ganancia Hoy', formatCurrency(ganancias.hoy?.gananciaNeta || 0), 'money', 'var(--color-success)')}
+          ${statCard('Ganancia Semana', formatCurrency(ganancias.semana?.gananciaNeta || 0), 'chart', 'var(--color-gold)')}
+          ${statCard('Ganancia Mes', formatCurrency(ganancias.mes?.gananciaNeta || 0), 'chart', 'var(--color-gold)')}
+          ${statCard('Ganancia Año', formatCurrency(ganancias.anio?.gananciaNeta || 0), 'new', 'var(--color-info)')}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;font-size:0.875rem;">
+          <div style="padding:0.75rem;background:var(--color-bg-input);border-radius:var(--radius-sm);">
+            <p style="color:var(--color-text-muted);margin-bottom:0.25rem;">Mes — Membresías</p>
+            <strong style="color:var(--color-gold);">${formatCurrency(ganancias.mes?.ingresosMembresias || 0)}</strong>
+          </div>
+          <div style="padding:0.75rem;background:var(--color-bg-input);border-radius:var(--radius-sm);">
+            <p style="color:var(--color-text-muted);margin-bottom:0.25rem;">Mes — Productos</p>
+            <strong style="color:var(--color-gold);">${formatCurrency(ganancias.mes?.ingresosProductos || 0)}</strong>
+          </div>
+          <div style="padding:0.75rem;background:var(--color-bg-input);border-radius:var(--radius-sm);">
+            <p style="color:var(--color-text-muted);margin-bottom:0.25rem;">Mes — Ganancia productos</p>
+            <strong style="color:var(--color-success);">${formatCurrency(ganancias.mes?.gananciaProductos || 0)}</strong>
+          </div>
+          <div style="padding:0.75rem;background:var(--color-bg-input);border-radius:var(--radius-sm);">
+            <p style="color:var(--color-text-muted);margin-bottom:0.25rem;">Mes — Ganancia neta</p>
+            <strong>${formatCurrency(ganancias.mes?.gananciaNeta || 0)}</strong>
+          </div>
+        </div>
       </div>
 
       <div class="grid-2" style="margin-bottom:1.5rem;">

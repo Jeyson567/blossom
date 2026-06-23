@@ -42,8 +42,12 @@ export async function getProductoById(id) {
 }
 
 export async function createProducto(data) {
+  const codigo = data.codigo?.trim()
+    ? data.codigo.trim().toUpperCase()
+    : `PRD-${Date.now().toString(36).toUpperCase()}`;
+
   const productoData = {
-    codigo: data.codigo.trim().toUpperCase(),
+    codigo,
     nombre: sanitizeString(data.nombre),
     categoria: data.categoria?.trim() || 'General',
     stock: Number(data.stock) || 0,
@@ -128,4 +132,31 @@ export async function getCategorias() {
 
 export async function getAllProductos() {
   return fetchAllProductos();
+}
+
+/** Venta POS: descuenta stock y registra movimiento de salida. */
+export async function venderProducto({ productoId, cantidad, motivo, usuario }) {
+  const qty = Number(cantidad) || 1;
+  const producto = await getProductoById(productoId);
+  if (!producto) throw new Error('Producto no encontrado');
+  if (producto.stock < qty) throw new Error(`Stock insuficiente (disponible: ${producto.stock})`);
+
+  const mov = await registrarMovimiento({
+    productoId,
+    tipo: 'salida',
+    cantidad: qty,
+    motivo: motivo || 'Venta de producto',
+    usuario
+  });
+
+  const gananciaUnitaria = (producto.precioVenta || 0) - (producto.precioCompra || 0);
+  return {
+    producto: await getProductoById(productoId),
+    movimiento: mov,
+    cantidad: qty,
+    totalVenta: (producto.precioVenta || 0) * qty,
+    ganancia: gananciaUnitaria * qty,
+    precioCompraUnitario: producto.precioCompra || 0,
+    precioVentaUnitario: producto.precioVenta || 0
+  };
 }
