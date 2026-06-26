@@ -123,6 +123,9 @@ function showNuevaVenta(container) {
             <input type="radio" name="tipo-venta" value="membresia" checked> Membresía
           </label>
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem;">
+            <input type="radio" name="tipo-venta" value="inscripcion"> Inscripción
+          </label>
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem;">
             <input type="radio" name="tipo-venta" value="producto"> Producto
           </label>
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem;">
@@ -139,6 +142,7 @@ function showNuevaVenta(container) {
     const tipo = document.querySelector('input[name="tipo-venta"]:checked')?.value;
     close();
     if (tipo === 'membresia') navigateTo(ROUTES.VENTA);
+    else if (tipo === 'inscripcion') showInscripcion(container);
     else if (tipo === 'producto') showVentaProducto(container);
     else showOtroIngreso(container);
   });
@@ -295,6 +299,64 @@ async function showVentaProducto(container) {
     } catch (error) {
       Swal.fire({ icon: 'error', title: 'Error', text: error.message, background: '#1a1a1a', color: '#fff' });
     }
+  });
+}
+
+async function showInscripcion(container) {
+  const clientes = await getAllClientes();
+  let selectedCliente = null;
+  const metodoOptions = Object.entries(PAYMENT_METHOD_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+
+  const { close } = createModal({
+    title: 'Inscripción',
+    size: 'modal-lg',
+    content: `
+      <form id="form-pago-inscripcion">
+        <div class="form-group">
+          <label class="form-label required">Cliente</label>
+          ${renderClienteSearchBox({ inputId: 'pago-inscripcion-cliente' })}
+          <div class="cliente-search-results" id="pago-inscripcion-cliente-results"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Concepto</label><input class="form-input" name="concepto" value="Inscripción"></div>
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label required">Monto (Q)</label><input type="number" step="0.01" class="form-input" name="monto" required></div>
+          <div class="form-group"><label class="form-label required">Método</label><select class="form-select" name="metodoPago" required>${metodoOptions}</select></div>
+        </div>
+      </form>
+    `,
+    footer: `<button class="btn btn-secondary" id="btn-cancel-inscripcion">Cancelar</button><button class="btn btn-primary" id="btn-save-inscripcion">Registrar</button>`
+  });
+
+  bindClienteSearch({
+    input: document.getElementById('pago-inscripcion-cliente'),
+    resultsEl: document.getElementById('pago-inscripcion-cliente-results'),
+    allClientes: clientes,
+    onSelect: (c) => { selectedCliente = c; }
+  });
+
+  document.getElementById('btn-cancel-inscripcion')?.addEventListener('click', close);
+  document.getElementById('btn-save-inscripcion')?.addEventListener('click', async () => {
+    if (!selectedCliente) {
+      Swal.fire({ icon: 'warning', title: 'Seleccione un cliente', background: '#1a1a1a', color: '#fff' });
+      return;
+    }
+    const form = document.getElementById('form-pago-inscripcion');
+    const data = Object.fromEntries(new FormData(form));
+    if (hasErrors(validatePagoForm(data))) return;
+    const user = getCurrentUserData();
+    await createPago({
+      clienteId: selectedCliente.id,
+      clienteNombre: selectedCliente.nombreCompleto,
+      concepto: data.concepto?.trim() || 'Inscripción',
+      tipo: 'inscripcion',
+      monto: data.monto,
+      metodoPago: data.metodoPago,
+      ganancia: Number(data.monto),
+      usuario: { uid: user.id, nombre: user.nombre }
+    });
+    close();
+    Swal.fire({ icon: 'success', title: 'Inscripción registrada', timer: 1200, showConfirmButton: false, background: '#1a1a1a', color: '#fff' });
+    loadPagos(container);
   });
 }
 

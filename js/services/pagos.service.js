@@ -41,7 +41,30 @@ export async function createPago({
 
   const docRef = doc(collection(db, COLLECTION));
   await setDoc(docRef, pagoData);
-  return { id: docRef.id, ...pagoData };
+  const pago = { id: docRef.id, ...pagoData };
+
+  if (tipo === 'inscripcion') {
+    await registrarInscripcionEnCaja({ concepto, monto: pagoData.monto, metodoPago, usuario });
+  }
+
+  return pago;
+}
+
+async function registrarInscripcionEnCaja({ concepto, monto, metodoPago, usuario }) {
+  try {
+    const { getCajaAbierta, registrarMovimientoCaja } = await import('./caja.service.js');
+    const caja = await getCajaAbierta();
+    if (!caja) return;
+    await registrarMovimientoCaja(caja.id, {
+      tipo: 'ingreso',
+      concepto: concepto || 'Inscripción',
+      monto,
+      metodoPago,
+      usuario
+    });
+  } catch (error) {
+    console.warn('[BFC Pagos] Inscripción registrada sin reflejar en caja:', error.message);
+  }
 }
 
 export async function getPagos(options = {}) {
@@ -77,7 +100,8 @@ export async function getIngresosPorRango(inicio, fin) {
     return f && f >= inicio && f <= fin;
   });
   const total = filtered.reduce((sum, p) => sum + (p.monto || 0), 0);
-  return { total, count: filtered.length, pagos: filtered };
+  const categorias = calcGananciasFromPagos(filtered);
+  return { total, count: filtered.length, pagos: filtered, ...categorias };
 }
 
 export async function getIngresosDelDia() {
@@ -142,25 +166,29 @@ export async function getAllPagos() {
 }
 
 function calcGananciasFromPagos(pagos) {
-  const membresias = pagos.filter(p => p.tipo === 'membresia' || p.tipo === 'inscripcion');
+  const membresias = pagos.filter(p => p.tipo === 'membresia');
+  const inscripciones = pagos.filter(p => p.tipo === 'inscripcion');
   const productos = pagos.filter(p => p.tipo === 'producto');
-  const otros = pagos.filter(p => !['membresia', 'inscripcion', 'producto'].includes(p.tipo));
+  const otros = pagos.filter(p => p.tipo === 'otro' || !['membresia', 'inscripcion', 'producto'].includes(p.tipo));
 
   const ingresosMembresias = membresias.reduce((s, p) => s + (p.monto || 0), 0);
+  const ingresosInscripcion = inscripciones.reduce((s, p) => s + (p.monto || 0), 0);
   const ingresosProductos = productos.reduce((s, p) => s + (p.monto || 0), 0);
   const ingresosOtros = otros.reduce((s, p) => s + (p.monto || 0), 0);
   const gananciaProductos = productos.reduce((s, p) => s + (p.ganancia ?? ((p.monto || 0) - (p.precioCompraUnitario || 0) * (p.cantidad || 1))), 0);
-  const gananciaMembresias = ingresosMembresias;
+  const gananciaMembresias = ingresosMembresias + ingresosInscripcion;
   const gananciaNeta = gananciaMembresias + gananciaProductos + ingresosOtros;
+  const totalIngresos = ingresosMembresias + ingresosInscripcion + ingresosProductos + ingresosOtros;
 
   return {
     ingresosMembresias,
+    ingresosInscripcion,
     ingresosProductos,
     ingresosOtros,
     gananciaProductos,
     gananciaMembresias,
     gananciaNeta,
-    totalIngresos: ingresosMembresias + ingresosProductos + ingresosOtros
+    totalIngresos
   };
 }
 

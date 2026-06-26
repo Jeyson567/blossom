@@ -159,7 +159,6 @@ export async function crearAdministradorInicial({ nombre, email, password }) {
   log('Sesión iniciada en app principal');
 
   await asegurarConfiguracionGeneral();
-  await crearPlanesPorDefecto();
   await marcarSistemaConfigurado({
     adminUid: usuario.id,
     adminEmail: email.trim().toLowerCase(),
@@ -193,14 +192,6 @@ export async function inicializarSistema(userData) {
   }
 
   if (userData?.rol === ROLES.ADMIN) {
-    try {
-      await crearPlanesPorDefecto();
-      resultados.planes = true;
-      log('✓ Planes verificados');
-    } catch (error) {
-      console.error('[BFC Bootstrap] Error creando planes:', error);
-    }
-
     try {
       await marcarSistemaConfigurado({ adminUid: userData.id, origen: 'arranque_app' });
       resultados.sistema = true;

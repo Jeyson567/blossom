@@ -4,6 +4,7 @@ import { getMembresiasStats } from '../services/membresias.service.js';
 import { getAllProductos, getStockAlerts } from '../services/inventario.service.js';
 import { getConfig } from '../services/config.service.js';
 import { formatCurrency, formatDate } from '../utils/formatters.js';
+import { PAYMENT_TYPE_LABELS, PAYMENT_METHOD_LABELS } from '../utils/constants.js';
 import { exportToPDF } from '../reports/pdf-export.js';
 import { exportToExcel } from '../reports/excel-export.js';
 
@@ -63,7 +64,10 @@ async function renderIngresosReport(content, config) {
     { key: 'anio', label: 'Anual' }
   ];
 
-  const { total, count, pagos } = await getIngresosPorPeriodo(currentPeriodo);
+  const {
+    total, count, pagos,
+    ingresosMembresias, ingresosInscripcion, ingresosProductos, ingresosOtros
+  } = await getIngresosPorPeriodo(currentPeriodo);
 
   content.innerHTML = `
     <div class="card">
@@ -78,23 +82,28 @@ async function renderIngresosReport(content, config) {
       </div>
 
       <div class="grid-stats" style="margin-bottom:1.5rem;">
-        <div class="card stat-card"><div class="stat-value">${formatCurrency(total)}</div><div class="stat-label">Total Ingresos</div></div>
+        <div class="card stat-card"><div class="stat-value">${formatCurrency(ingresosMembresias || 0)}</div><div class="stat-label">Membresías</div></div>
+        <div class="card stat-card"><div class="stat-value">${formatCurrency(ingresosInscripcion || 0)}</div><div class="stat-label">Inscripciones</div></div>
+        <div class="card stat-card"><div class="stat-value">${formatCurrency(ingresosProductos || 0)}</div><div class="stat-label">Productos</div></div>
+        <div class="card stat-card"><div class="stat-value">${formatCurrency(ingresosOtros || 0)}</div><div class="stat-label">Otros ingresos</div></div>
+        <div class="card stat-card"><div class="stat-value">${formatCurrency(total)}</div><div class="stat-label">Total general</div></div>
         <div class="card stat-card"><div class="stat-value">${count}</div><div class="stat-label">Transacciones</div></div>
       </div>
 
       <div class="table-container">
         <table class="data-table">
-          <thead><tr><th>Fecha</th><th>Cliente</th><th>Concepto</th><th>Monto</th><th>Método</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Cliente</th><th>Concepto</th><th>Tipo</th><th>Monto</th><th>Método</th></tr></thead>
           <tbody>
             ${pagos.slice(0, 50).map(p => `
               <tr>
                 <td>${formatDate(p.fecha)}</td>
                 <td>${p.clienteNombre}</td>
                 <td>${p.concepto}</td>
+                <td>${PAYMENT_TYPE_LABELS[p.tipo] || p.tipo}</td>
                 <td>${formatCurrency(p.monto)}</td>
-                <td>${p.metodoPago}</td>
+                <td>${PAYMENT_METHOD_LABELS[p.metodoPago] || p.metodoPago}</td>
               </tr>
-            `).join('') || '<tr><td colspan="5" style="text-align:center;">Sin datos</td></tr>'}
+            `).join('') || '<tr><td colspan="6" style="text-align:center;">Sin datos</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -112,15 +121,21 @@ async function renderIngresosReport(content, config) {
     { key: 'fecha', label: 'Fecha', format: 'date' },
     { key: 'clienteNombre', label: 'Cliente' },
     { key: 'concepto', label: 'Concepto' },
+    { key: 'tipo', label: 'Tipo' },
     { key: 'monto', label: 'Monto', format: 'currency' },
     { key: 'metodoPago', label: 'Método' }
   ];
+  const exportData = pagos.map(p => ({
+    ...p,
+    tipo: PAYMENT_TYPE_LABELS[p.tipo] || p.tipo,
+    metodoPago: PAYMENT_METHOD_LABELS[p.metodoPago] || p.metodoPago
+  }));
 
   document.getElementById('export-pdf')?.addEventListener('click', () => {
-    exportToPDF({ title: `Reporte de Ingresos — ${currentPeriodo}`, columns, data: pagos, filename: `ingresos-${currentPeriodo}`, gymName: config.nombreGimnasio });
+    exportToPDF({ title: `Reporte de Ingresos — ${currentPeriodo}`, columns, data: exportData, filename: `ingresos-${currentPeriodo}`, gymName: config.nombreGimnasio });
   });
   document.getElementById('export-excel')?.addEventListener('click', () => {
-    exportToExcel({ columns, data: pagos, filename: `ingresos-${currentPeriodo}`, sheetName: 'Ingresos' });
+    exportToExcel({ columns, data: exportData, filename: `ingresos-${currentPeriodo}`, sheetName: 'Ingresos' });
   });
 }
 

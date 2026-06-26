@@ -1,4 +1,4 @@
-import { getPlanes, createPlan, updatePlan, deletePlan, togglePlanStatus } from '../services/planes.service.js';
+import { getPlanes, createPlan, updatePlan, deletePlan } from '../services/planes.service.js';
 import { renderDataTable } from '../components/data-table.js';
 import { createModal } from '../components/modal.js';
 import { renderEmptyState, bindEmptyAction } from '../components/empty-state.js';
@@ -59,12 +59,11 @@ export async function render(container) {
             { key: 'nombre', label: 'Nombre' },
             { key: 'duracionDias', label: 'Duración', render: v => `${v} días` },
             { key: 'precio', label: 'Precio', format: 'currency' },
-            { key: 'activo', label: 'Estado', render: v => `<span class="badge ${v !== false ? 'badge-success' : 'badge-neutral'}">${v !== false ? 'Activo' : 'Inactivo'}</span>` }
+            { key: 'activo', label: 'Estado', render: v => `<span class="badge ${v !== false ? 'badge-success' : 'badge-neutral'}">${v !== false ? 'Activa' : 'Inactiva'}</span>` }
           ],
           data: planes,
           actions: (row) => `
             <button class="btn btn-secondary btn-sm" data-action="edit" data-id="${row.id}">Editar</button>
-            <button class="btn btn-secondary btn-sm" data-action="toggle" data-id="${row.id}">${row.activo !== false ? 'Desactivar' : 'Activar'}</button>
             ${canDelete(getUserRole()) ? `<button class="btn btn-danger btn-sm" data-action="delete" data-id="${row.id}">Eliminar</button>` : ''}
           `,
           emptyMessage: 'No hay registros'
@@ -84,13 +83,17 @@ export async function render(container) {
     btn.addEventListener('click', async () => {
       const { id, action } = btn.dataset;
       if (action === 'edit') showPlanForm(container, id);
-      else if (action === 'toggle') {
-        const { getPlanById } = await import('../services/planes.service.js');
-        const plan = await getPlanById(id);
-        await togglePlanStatus(id, !plan.activo);
-        render(container);
-      } else if (action === 'delete') {
-        const ok = await Swal.fire({ title: '¿Eliminar plan?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', background: '#1a1a1a', color: '#fff' });
+      else if (action === 'delete') {
+        const ok = await Swal.fire({
+          title: '¿Eliminar esta membresía?',
+          text: 'Esta acción no se puede deshacer.',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Eliminar',
+          confirmButtonColor: '#ef4444',
+          background: '#1a1a1a',
+          color: '#fff'
+        });
         if (ok.isConfirmed) { await deletePlan(id); render(container); }
       }
     });
@@ -108,12 +111,13 @@ async function showPlanForm(container, id = null) {
     title: plan ? 'Editar Membresía' : 'Nueva Membresía',
     content: `
       <form id="form-plan">
-        <div class="form-group"><label class="form-label required">Nombre</label><input class="form-input" name="nombre" value="${plan?.nombre || ''}" required><div class="form-error" data-error="nombre"></div></div>
+        <div class="form-group"><label class="form-label required">Nombre del plan</label><input class="form-input" name="nombre" value="${plan?.nombre || ''}" required><div class="form-error" data-error="nombre"></div></div>
+        <div class="form-group"><label class="form-label">Descripción (opcional)</label><textarea class="form-input" name="descripcion" rows="2" placeholder="Detalle del plan">${plan?.descripcion || ''}</textarea></div>
         <div class="form-grid">
-          <div class="form-group"><label class="form-label required">Precio (Q)</label><input type="number" step="0.01" class="form-input" name="precio" value="${plan?.precio ?? ''}" required><div class="form-error" data-error="precio"></div></div>
           <div class="form-group"><label class="form-label required">Duración (días)</label><input type="number" class="form-input" name="duracionDias" value="${plan?.duracionDias ?? ''}" required><div class="form-error" data-error="duracionDias"></div></div>
+          <div class="form-group"><label class="form-label required">Precio (Q)</label><input type="number" step="0.01" class="form-input" name="precio" value="${plan?.precio ?? ''}" required><div class="form-error" data-error="precio"></div></div>
         </div>
-        <div class="form-group"><label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;"><input type="checkbox" name="activo" ${plan?.activo !== false ? 'checked' : ''}> Activo</label></div>
+        <div class="form-group"><label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;"><input type="checkbox" name="activo" ${plan?.activo !== false ? 'checked' : ''}> Activa</label></div>
       </form>
     `,
     footer: `<button class="btn btn-secondary" id="btn-cancel-plan">Cancelar</button><button class="btn btn-primary" id="btn-save-plan">Guardar</button>`

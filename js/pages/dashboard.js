@@ -80,6 +80,16 @@ export async function render(container) {
       </div>
 
       <div class="card" style="margin-bottom:1.5rem;">
+        <h3 style="font-size:1rem;margin-bottom:1rem;">Ingresos del mes por categoría</h3>
+        <div class="grid-stats">
+          ${statCard('💪 Membresías', formatCurrency(ganancias.mes?.ingresosMembresias || 0), 'money', 'var(--color-gold)')}
+          ${statCard('📝 Inscripciones', formatCurrency(ganancias.mes?.ingresosInscripcion || 0), 'money', 'var(--color-info)')}
+          ${statCard('🛒 Productos', formatCurrency(ganancias.mes?.ingresosProductos || 0), 'money', 'var(--color-success)')}
+          ${statCard('💰 Total ingresos', formatCurrency(ganancias.mes?.totalIngresos || 0), 'chart', 'var(--color-gold)')}
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:1.5rem;">
         <h3 style="font-size:1rem;margin-bottom:1rem;">💰 Ganancias</h3>
         <div class="grid-stats" style="margin-bottom:1rem;">
           ${statCard('Ganancia Hoy', formatCurrency(ganancias.hoy?.gananciaNeta || 0), 'money', 'var(--color-success)')}
